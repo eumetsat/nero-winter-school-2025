@@ -88,9 +88,7 @@ def get_rgb_array(red: xr.DataArray, green: xr.DataArray, blue: xr.DataArray):
 
 
 def main_earthdata(start_time, end_time, lonlat_bbox, output_dir, run_name, composites_dict):
-    os.environ["EARTHDATA_USERNAME"] = credentials.EARTHDATA_USER
-    os.environ["EARTHDATA_PASSWORD"] = credentials.EARTHDATA_PASSWORD
-    earthaccess.login(strategy="environment", persist=True)
+    earthaccess.login(persist=True)
 
     # Create a Polygon representing the bounding box
     min_lon, min_lat, max_lon, max_lat = lonlat_bbox
