@@ -162,7 +162,7 @@ so, if required.
 tree, and you will unable to navigate to these. So make sure you run the line above 
 from the correct directory!*
 
-Now you can run the notebooks! We recommend you start with the [Index](./Index.ipynb) module.
+Before you can run the notebooks, go to the [credentials](./credentials.py) file and fill in with your passwords.
 
 ### Running on cloud platforms
 
