@@ -1,0 +1,16 @@
+# Copyright holder
+copyright: (c) 2025 EUMETSAT
+copyright: (c) 2025 Universitat Autonoma de Barcelona
+This software is jointly developed and maintained by EUMETSAT and the individual contributors P. Sánchez and I. González.
+license: GPL-3.0-or-later
+ 
+# List of development authors
+Dominika Leskow-Czyzewska (EUMETSAT)
+Andrea Meraner (EUMETSAT)
+
+# List of contributory authors
+ P. Sánchez (Universitat Autonoma de Barcelona)
+ I. González (Universitat Autonoma de Barcelona)
+
+# Support
+For all queries on this software package, please contact ops@eumetsat.int
