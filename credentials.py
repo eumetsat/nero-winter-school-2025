@@ -11,7 +11,6 @@ FIRMS_MAP_KEY = "<KEY>"
 
 EARTHDATA_USER = "<EMAIL>"
 EARTHDATA_PASSWORD = "<PASSWORD>"
-EARTHDATA_USER = "<USER>"
 
 # find yours at https://api.eumetsat.int/api-key/
 EUMDAC_CONSUMER_KEY = "<KEY>"
