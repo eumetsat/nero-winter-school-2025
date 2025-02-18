@@ -16,6 +16,7 @@ dependencies:
   - fiona
   - gdal
   - geopandas
+  - geoviews
   - h5netcdf
   - hvplot
   - ipywidgets
