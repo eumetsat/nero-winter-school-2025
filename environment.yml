@@ -16,6 +16,8 @@ dependencies:
   - fiona
   - gdal
   - geopandas
+  - h5netcdf
+  - hvplot
   - ipywidgets
   - jupyterlab
   - matplotlib
@@ -23,6 +25,7 @@ dependencies:
   - openeo
   - pandas
   - pip
+  - pyproj
   - pystac
   - python==3.11
   - rasterio
