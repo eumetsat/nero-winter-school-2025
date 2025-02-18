@@ -22,6 +22,10 @@ import xarray as xr
 from osgeo import gdal
 from shapely.geometry import Polygon
 
+import warnings
+
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="dask")
+
 import credentials
 
 # TODO merge granules from same orbit into one raster
@@ -145,7 +149,6 @@ def main_earthdata(start_time, end_time, lonlat_bbox, output_dir, run_name, comp
             # Use vsicurl to load the data directly into memory (be patient, may take a few seconds)
             chunk_size = dict(band=1, x=512, y=512)  # Tiles have 1 band and are divided into 512x512 pixel chunks
             for e in band_links:
-                print(e)
                 if e.rsplit('.', 2)[-2] == bands[0]:
                     red_beam = rxr.open_rasterio(e, chunks=chunk_size, masked=True).squeeze('band', drop=True)
                     red_beam.attrs['scale_factor'] = 0.0001  # hard coded the scale_factor attribute
@@ -176,7 +179,7 @@ def main_earthdata(start_time, end_time, lonlat_bbox, output_dir, run_name, comp
             rgb.rio.to_raster(raster_path=output_name, driver='COG')
 
             print(f"Processed file {j + 1} of {len(hls_results_urls)}")
-
+    print("Processing has finished")
     return
 
 

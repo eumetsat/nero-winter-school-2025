@@ -20,6 +20,11 @@ from satpy.readers import find_files_and_readers, FSFile
 
 import credentials
 
+import warnings
+
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="dask")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="satpy")
+
 CACHE_SIZE_LIMIT_GB = 4
 CACHE_FOLDER = "./bucket_cache/"
 
@@ -32,15 +37,17 @@ def run_satpy_for_files_and_area(fci_filenames, datasets, lonlat_bbox, output_di
 
     single_channel_ds = [ds for ds in datasets if ds in scn_crop and len(scn_crop[ds].shape) == 2]
     for dataset in single_channel_ds:
+        out_dir_ds = os.path.join(output_dir, dataset)
         scn_crop.save_dataset(dataset, filename="{start_time:%Y-%m-%dT%H%M}_mtg_fci_{name}.tif",
-                              base_dir=output_dir,
+                              base_dir=out_dir_ds,
                               writer='geotiff', enhance=False)
 
     scn_crop_r = scn_crop.resample(scn_crop.finest_area(), resampler='native', reduce_data=False)
     multi_channel_ds = [ds for ds in datasets if ds not in single_channel_ds]
     for dataset in multi_channel_ds:
+        out_dir_ds = os.path.join(output_dir, dataset)
         scn_crop_r.save_dataset(dataset, filename="{start_time:%Y-%m-%dT%H%M}_mtg_fci_{name}.tif",
-                                base_dir=output_dir, writer='geotiff', enhance=True)
+                                base_dir=out_dir_ds, writer='geotiff', enhance=True)
 
     return
 
@@ -59,7 +66,9 @@ def clear_cache_if_exceeds_limit(cache_storage, size_limit_gb):
                 os.rmdir(os.path.join(root, dir))
 
 
-def main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir, run_name, remote_files=False):
+def main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir, run_name,
+             remote_files=False,
+             process_RC_every_minutes=10):
     # Convert start and end times to datetime objects
     start_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%S")
     end_dt = datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%S")
@@ -104,28 +113,30 @@ def main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir,
         else:
             print("Skipping RC due to missing input files.")
 
-        current_dt += timedelta(minutes=10)
+        current_dt += timedelta(minutes=process_RC_every_minutes)
 
 
 if __name__ == "__main__":
     # should be a full 10-min time, like :00, :10, :20...
-    start_time = "2024-09-16T11:00:00"
-    end_time = "2024-09-16T23:59:59"
+    start_time = "2024-09-14T00:00:00"
+    end_time = "2024-09-20T23:59:59"
 
     # Define the latitude and longitude of the bounding box
-    W = 26.5
-    S = 41.7
-    E = 27.3
-    N = 42.3
+    W = -8.8
+    S = 40.6
+    E = -7.4
+    N = 40.9
     lonlat_bbox = [W, S, E, N]
 
-    run_name = "testrun"
+    input_dir = '/tcenas/scratch/andream/sepeumdac/fci_l1c_input_data/'
+    # input_dir = 'satellite_data/fci_data/202409_Portugal/'
+    remote_files = False
 
-    # input_dir = '/tcenas/scratch/andream/fci_data_for_nero/sept_portugal/'
-    input_dir = 'satellite_data/fci_data/202409_Portugal/'
-    remote_files = True
-    output_dir = './'
+    run_name = "aveiro_penalva"
+    output_dir = './ref_data/'
 
     datasets = ['nir_22', 'ir_38', 'fire_temperature']
 
-    main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir, run_name, remote_files)
+    main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir, run_name,
+             remote_files=remote_files,
+             process_RC_every_minutes=10)

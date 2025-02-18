@@ -15,16 +15,14 @@ import os
 import zipfile
 
 
-def zip_output_folder(output_path, run_name):
-    folder_to_zip = os.path.join(output_path, run_name)
-    zip_file_path = f"{folder_to_zip}.zip"
-
-    with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+def zip_output_folder(folder_to_zip, output_filename):
+    print(f"Zipping folder {folder_to_zip} to {output_filename}")
+    with zipfile.ZipFile(output_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(folder_to_zip):
             for file in files:
                 file_path = os.path.join(root, file)
                 arcname = os.path.relpath(file_path, folder_to_zip)
                 zipf.write(file_path, arcname)
 
-    print(f"Generated zip file: {zip_file_path}")
+    print(f"Generated zip file: {output_filename}")
     return

@@ -11,12 +11,19 @@ import openeo
 from pathlib import Path
 from os import chmod
 
-def main_sentinel2(start_date, end_date, W,S,E,N, bands, output_dir, run_name):
+
+def main_sentinel2(start_date, end_date, W, S, E, N, bands, output_dir, run_name):
+
     download_dir = Path(output_dir) / run_name / "Satellite_Imagery" / "S2_DAILY"
 
-    chmod('/home/jovyan/.local/share/openeo-python-client/refresh-tokens.json', 0o600)
+    # chmod('/home/jovyan/.local/share/openeo-python-client/refresh-tokens.json', 0o600)
     connection = openeo.connect(url="openeo.dataspace.copernicus.eu")
     connection.authenticate_oidc()
+
+    # Ensure start_date and end_date contain only date (no time)
+    start_date = start_date.split("T")[0] if "T" in start_date else start_date
+    end_date = end_date.split("T")[0] if "T" in end_date else end_date
+
     
     datacube = connection.load_collection(
         "SENTINEL2_L2A",
@@ -43,18 +50,18 @@ def main_sentinel2(start_date, end_date, W,S,E,N, bands, output_dir, run_name):
         print(f'File: {path}')
 
 if __name__ == "__main__":
-    S = 38.017263
-    W = 23.806
-    E = 23.994827
-    N = 38.267837
+    start_time = "2024-09-20T00:00:00"
+    end_time = "2024-09-22T23:59:59"
 
-    start_date = "2024-08-07"
-    end_date = "2024-08-18" #time 00:00
+    # Define the latitude and longitude of the bounding box
+    W = -8.8
+    S = 40.6
+    E = -7.4
+    N = 40.9
     
     bands = ["B08", "B04", "B03", "B02", "B12"]
 
-    run_name = "testrun"
+    run_name = "aveiro_penalva"
+    output_dir = './ref_data/'
 
-    output_dir = './'
-
-    main_sentinel2(start_date, end_date, W, S, E, N, bands, output_dir, run_name)
+    main_sentinel2(start_time, end_time, W, S, E, N, bands, output_dir, run_name)

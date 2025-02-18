@@ -62,7 +62,9 @@ def write_gdfs_to_file(gdfs, current_day, output_dir):
 
 
 def process_day_of_points(current_day, gdfs, output_dir):
-    if gdfs is not None:
+    if gdfs is None:
+        print('Initialising processing')
+    elif gdfs is not None and len(gdfs) > 0:
         gdfs = pd.concat(gdfs, ignore_index=True)
         print(
             f"Processing {len(gdfs)} points for day {current_day}. "
@@ -71,7 +73,7 @@ def process_day_of_points(current_day, gdfs, output_dir):
         write_gdfs_to_file(gdfs, current_day, output_dir)
         plot_fre_from_gdfs(gdfs, current_day, output_dir)
     else:
-        print(f"No points found in day {current_day}")
+        print(f"Day {current_day} had no points.")
 
 
 def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
@@ -102,8 +104,6 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
                          f"{current_time.strftime('%m')}/{current_time.strftime('%d')}/")
         shp_path = f"{download_path}/{file_pattern.format(current_time.strftime('%Y%m%d%H%M'))}"
 
-        current_time += timedelta(minutes=15)
-
         try:
             # Read the shapefile using geopandas
             gdf = gpd.read_file(shp_path)
@@ -113,6 +113,7 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
             filtered_gdf = gdf.cx[lon_min:lon_max, lat_min:lat_max].copy()  # make a copy to avoid working on the view
             if len(filtered_gdf) == 0:
                 print(f"No points left after lat-lon filtering in time {current_time}, continuing to next time")
+                current_time += timedelta(minutes=15)
                 continue
             else:
                 print(f"Processing slot {current_time}, found {len(filtered_gdf)} points.")
@@ -123,7 +124,9 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
             filtered_gdf.loc[:, 'day_time'] = current_time.strftime('%Y-%m-%d %H:%M')
 
             gdfs.append(filtered_gdf)
+            current_time += timedelta(minutes=15)
         except Exception as e:
+            current_time += timedelta(minutes=15)
             print(f"Error processing shapefile {shp_path}: {e}")
 
     else:
@@ -134,14 +137,14 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
 
 
 if __name__ == "__main__":
-    start_time = "2024-09-16T23:00:00"  # should be a full 15-min time, like :00, :15, :30...
-    end_time = "2024-09-20T23:59:59"
+    start_time = "2024-08-14T23:00:00"  # should be a full 15-min time, like :00, :15, :30...
+    end_time = "2024-08-15T23:59:59"
 
     # Define the latitudes and longitudes of the bounding box
-    W = 26.5
-    S = 41.7
-    E = 27.3
-    N = 42.3
+    W = 23.3
+    S = 37.8
+    E = 24.5
+    N = 38.5
     lonlat_bbox = [W, S, E, N]
 
     run_name = "testrun"

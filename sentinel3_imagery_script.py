@@ -163,19 +163,18 @@ def main_sentinel3(instrument, start_time, end_time, W, S, E, N, output_dir, run
 
 
 if __name__ == "__main__":
-    start_time = "2024-08-11T00:00:00"
-    end_time = "2024-08-13T23:59:59"
+    start_time = "2024-09-14T00:00:00"
+    end_time = "2024-09-20T23:59:59"
 
     # Define the latitude and longitude of the bounding box
-    W = 23.806
-    S = 38.017263
-    E = 23.994827
-    N = 38.267837
+    W = -8.8
+    S = 40.6
+    E = -7.4
+    N = 40.9
 
-    run_name = "testrun"
+    run_name = "aveiro_penalva"
+    output_dir = './ref_data/'
 
-    output_dir = './'
-
-    #main_sentinel3('SLSTR_SOLAR', start_time, end_time, W,S,E,N, output_dir, run_name)
-    #main_sentinel3('SLSTR_THERMAL', start_time, end_time, W,S,E,N, output_dir, run_name)
+    # main_sentinel3('SLSTR_SOLAR', start_time, end_time, W,S,E,N, output_dir, run_name)
+    # main_sentinel3('SLSTR_THERMAL', start_time, end_time, W,S,E,N, output_dir, run_name)
     main_sentinel3('OLCI', start_time, end_time, W, S, E, N, output_dir, run_name)
