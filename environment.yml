@@ -11,6 +11,7 @@ channels:
   - conda-forge
   - eumetsat
 dependencies:
+  - boto3
   - earthaccess
   - eumdac
   - fiona

@@ -109,7 +109,12 @@ def main_earthdata(start_time, end_time, lonlat_bbox, output_dir, run_name, comp
         bounding_box=tuple(lonlat_bbox),
         temporal=(start_time, end_time),
     )
-
+    if len(results) == 0:
+        print("No results found for query. Exiting.")
+        return
+    else:
+        print(f"Found {len(results)} results for query.")
+    
     hls_results_urls = [granule.data_links() for granule in results]
 
     for composite_name, bands_dict in composites_dict.items():

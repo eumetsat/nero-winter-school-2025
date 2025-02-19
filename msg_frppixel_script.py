@@ -20,7 +20,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 
-def plot_fre_from_gdfs(gdfs, current_day, output_dir):
+def plot_fre_from_gdfs(gdfs, current_day, output_dir, start_time=None, end_time=None):
     # Convert 'day_time' to datetime format
     gdfs["day_time"] = pd.to_datetime(gdfs["day_time"])
 
@@ -44,7 +44,10 @@ def plot_fre_from_gdfs(gdfs, current_day, output_dir):
     ax.xaxis.set_major_locator(mdates.AutoDateLocator())
     plt.xticks(rotation=45, ha="right")
     plt.grid(True)
-    output_path = os.path.join(output_dir, f"{current_day}_fre_timeseries.png")
+    if current_day == 'all':
+        output_path = os.path.join(output_dir, f"full_range_{start_time}_{end_time}_fre_timeseries.png")
+    else:
+        output_path = os.path.join(output_dir, f"{current_day}_fre_timeseries.png")
     plt.savefig(output_path, format="png", dpi=300, bbox_inches="tight")
     print(f"Saved FRE time series plot to: {output_path}")
     plt.show(block=False)
@@ -52,9 +55,12 @@ def plot_fre_from_gdfs(gdfs, current_day, output_dir):
     return
 
 
-def write_gdfs_to_file(gdfs, current_day, output_dir):
+def write_gdfs_to_file(gdfs, current_day, output_dir, start_time=None, end_time=None):
     # Define the output shapefile path
-    filtered_shp_path = os.path.join(output_dir, f"{current_day}_lsasaf_msg_frppixel.shp")
+    if current_day == 'all':
+        filtered_shp_path = os.path.join(output_dir, f"full_range_{start_time}_{end_time}_lsasaf_msg_frppixel.shp")
+    else:
+        filtered_shp_path = os.path.join(output_dir, f"{current_day}_lsasaf_msg_frppixel.shp")
     os.makedirs(os.path.dirname(filtered_shp_path), exist_ok=True)
     # Write the filtered GeoDataFrame to a new shapefile
     gdfs.to_file(filtered_shp_path, driver='ESRI Shapefile')
@@ -76,6 +82,19 @@ def process_day_of_points(current_day, gdfs, output_dir):
         print(f"Day {current_day} had no points.")
 
 
+def process_all_points(start_time, end_time, gdfs_all, output_dir):
+    if len(gdfs_all) > 0:
+        gdfs_all = pd.concat(gdfs_all, ignore_index=True)
+        print(
+            f"Processing {len(gdfs_all)} points for the entire time range from {start_time} to {end_time}. "
+            f"Writing shapefile and plot to {output_dir}"
+        )
+        write_gdfs_to_file(gdfs_all, 'all', output_dir, start_time=start_time, end_time=end_time)
+        plot_fre_from_gdfs(gdfs_all, 'all', output_dir, start_time=start_time, end_time=end_time)
+    else:
+        print("No points found in time range and area.")
+
+
 def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
     # Convert start and end times to datetime objects
     start_time_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%S")
@@ -90,6 +109,7 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
     os.makedirs(output_dir, exist_ok=True)
     current_day = None
     gdfs = None
+    gdfs_all = []
     while current_time <= end_time_dt:
 
         # Check if the current day has changed
@@ -124,6 +144,8 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
             filtered_gdf.loc[:, 'day_time'] = current_time.strftime('%Y-%m-%d %H:%M')
 
             gdfs.append(filtered_gdf)
+            gdfs_all.append(filtered_gdf)
+
             current_time += timedelta(minutes=15)
         except Exception as e:
             current_time += timedelta(minutes=15)
@@ -133,6 +155,7 @@ def main_lsasaf(start_time, end_time, lonlat_bbox, output_dir, run_name):
         process_day_of_points(current_day, gdfs, output_dir)
         print(f"Finished processing all times")
 
+    process_all_points(start_time, end_time, gdfs_all, output_dir)
     return
 
 
