@@ -108,6 +108,11 @@ def exec_data_tailor_process(product, datatailor, chain, download_dir):
     # Actual customisation submission
     customisation = datatailor.new_customisation(product, chain=chain)
 
+    data_tailor_quota = get_data_tailor_quota(datatailor)
+    # Only if over 30% of quota is used, clear the successfully finished customisations
+    if get_data_tailor_space_usage_percentage(data_tailor_quota) > 30:
+        clean_done_data_tailor_customisations(datatailor)
+
     # Printing customisation status
     sleep_time = 10 # seconds
     while True:
@@ -144,8 +149,8 @@ def submit_data_tailor_customisations(selected_products, datatailor, chain, down
     result_paths = []
     # Get the results as they complete
     for future in futures:
-        result_paths.append(future.result())
         print(future.result())
+        result_paths.append(future.result())
 
     return result_paths
 
@@ -161,7 +166,7 @@ def get_data_tailor_quota(datatailor):
 def get_data_tailor_space_usage_percentage(quota):
     return quota['data'][list(quota['data'].keys())[0]]['space_usage_percentage']
 
-def clean_data_tailor_customisations(datatailor):
+def clean_all_data_tailor_customisations(datatailor):
     # Clearing all customisations from the Data Tailor
     
     for customisation in datatailor.customisations:
@@ -183,6 +188,19 @@ def clean_data_tailor_customisations(datatailor):
             except requests.exceptions.RequestException as error:
                 print("Unexpected error:", error)
 
+def clean_done_data_tailor_customisations(datatailor):
+    # Clearing all customisations from the Data Tailor
+    
+    for customisation in datatailor.customisations:
+        if customisation.status in ['DONE']:
+            print(f'Delete completed customisation {customisation} from {customisation.creation_time} UTC.')
+            try:
+                customisation.delete()
+            except eumdac.datatailor.CustomisationError as error:
+                print("Customisation Error:", error)
+            except requests.exceptions.RequestException as error:
+                print("Unexpected error:", error)
+            
 
 def subset_and_overwrite_geotiff(input_tiff, bounding_box):
     # Input GeoTIFF path
@@ -237,17 +255,19 @@ def main_sentinel3(instrument, start_time, end_time, W, S, E, N, output_dir, run
 
     datatailor = eumdac.DataTailor(token)
     chain = read_data_tailor_chain(chain_path)
+    
+    data_tailor_quota = get_data_tailor_quota(datatailor)
+    # Only if over 50% of quota is used, clear the customisations
+    if get_data_tailor_space_usage_percentage(data_tailor_quota) > 50:
+        clean_all_data_tailor_customisations(datatailor)
 
     #submit the customisations and download the data
     result_paths = submit_data_tailor_customisations(selected_products, datatailor, chain, download_dir)
     #Crop the data
     for input_tiff in result_paths:
-        subset_and_overwrite_geotiff(input_tiff, bounding_box)
+        if input_tiff is not None:
+            subset_and_overwrite_geotiff(input_tiff, bounding_box)
 
-    data_tailor_quota = get_data_tailor_quota(datatailor)
-    # Only if over 50% of quota is used, clear the customisations
-    if get_data_tailor_space_usage_percentage(data_tailor_quota) > 50:
-        clean_data_tailor_customisations(datatailor)
     
     return
 
