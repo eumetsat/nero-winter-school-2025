@@ -6,100 +6,191 @@
 # 
 # You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import eumdac
+import time
+import requests
+import yaml
+import os
 
-from eocanvas import API, Credentials
-from eocanvas.api import Input, Config, ConfigOption
-from eocanvas.datatailor.chain import Chain
-from eocanvas.processes import DataTailorProcess
-
-from hda import Client
-
+import fnmatch
+import shutil
 from concurrent.futures import ThreadPoolExecutor
-
-MAX_QUOTA = 3
-
-from time import sleep
-from pathlib import Path
 
 import rasterio
 from rasterio.mask import mask
 from shapely.geometry import box
-import os
+from pathlib import Path
+
+MAX_QUOTA = 3
 
 import credentials
 
-
-def get_query_and_chain(instrument, start_time, end_time, W, S, E, N):
-    query = {
-        "dtstart": start_time + ".000Z",
-        "dtend": end_time + ".000Z",
-        "bbox": [
-            W,
-            S,
-            E,
-            N
-        ],
-        "timeliness": "NT",
-    }
-
-    if instrument == 'SLSTR_SOLAR':
-        query["dataset_id"] = "EO:EUM:DAT:SENTINEL-3:SL_1_RBT___"
-        query["orbitdir"] = "DESCENDING"
-        chain_path = "input_graphs/slstr_solar_subset.yaml"
+def get_config(instrument):
+    if instrument == 'OLCI':
+        folder_name = 'S3_OLCI'
+        collectionID = 'EO:EUM:DAT:0409' #OLCI
+        chain_path = 'input_graphs/olci_subset.yaml'
+        orbit_direction = ''
+    elif instrument == 'SLSTR_SOLAR':
+        folder_name = 'S3_SLSTR_SOLAR'
+        collectionID = 'EO:EUM:DAT:0411' #SLSTR
+        chain_path = 'input_graphs/slstr_solar_subset.yaml'
+        orbit_direction = 'DESCENDING'
     elif instrument == 'SLSTR_THERMAL':
-        query["dataset_id"] = "EO:EUM:DAT:SENTINEL-3:SL_1_RBT___"
-        chain_path = "input_graphs/slstr_thermal_subset.yaml"
-    elif instrument == 'OLCI':
-        query["dataset_id"] = "EO:EUM:DAT:SENTINEL-3:OL_1_EFR___"
-        chain_path = "input_graphs/olci_subset.yaml"
+        folder_name = 'S3_SLSTR_THERMAL'
+        collectionID = 'EO:EUM:DAT:0411' #SLSTR
+        chain_path = 'input_graphs/slstr_thermal_subset.yaml'
+        orbit_direction = ''
     else:
         return None
 
-    return (query, chain_path)
+    return (folder_name, collectionID, chain_path, orbit_direction)
+
+def get_eumdac_access_token(credentials=credentials):
+    consumer_key = credentials.EUMDAC_CONSUMER_KEY
+    consumer_secret = credentials.EUMDAC_CONSUMER_SECRET
+
+    credentials = (consumer_key, consumer_secret)
+    token = eumdac.AccessToken(credentials)
+
+    try:
+        print(f"\nThis token '{token}' expires {token.expiration}")
+        return token
+    except requests.exceptions.HTTPError as exc:
+        print(f"\nError when tryng the request to the server: '{exc}'")
 
 
-def exec_data_tailor_process(url, chain, download_dir):
-    print(f"Starting Data Tailor for product at {url}")
-    inputs = Input(key="img1", url=url)
-    process = DataTailorProcess(epct_chain=chain, epct_input=inputs)
-    process.run(download_dir=download_dir)
-    return f"Finishing Data Tailor for product at {url}"
-    sleep(1)  # Wait for one sec to finish
+def get_eumdac_collection(datastore, collectionID):
+    # Use collection ID
+    selected_collection = datastore.get_collection(collectionID)
+    try:
+        print(selected_collection.title)
+    except eumdac.collection.CollectionError as error:
+        print(f"Error related to a collection: '{error.msg}'")
+    except requests.exceptions.RequestException as error:
+        print(f"Unexpected error: {error}")
+    return selected_collection
 
 
-def search_output_filename_in_eocanvas_log(log):
-    filename = None
-    for line_number, entry in enumerate(log, start=1):
-        if 'output-product' in entry.message:  # case-insensitive search
-            filename = Path(entry.message.split(' ')[-1]).name
+def search_spatially_temporally_for_products(collection, start, end, bounding_box, orbit_direction=''):
+    # space/time filter the collection for products
+    products = collection.search(
+        bbox=bounding_box,
+        dtstart=start,
+        dtend=end,
+        orbitdir = orbit_direction)
+
+    print(f'Found Datasets: {products.total_results} datasets for the given time range and geographical area')
+    for product in products:
+        try:
+            print(product)
+        except eumdac.collection.CollectionError as error:
+            print(f"Error related to the collection: '{error.msg}'")
+        except eumdac.product.ProductError as error:
+            print(f"Error related to the product: '{error.msg}'")
+        except requests.exceptions.RequestException as error:
+            print(f"Unexpected error: {error}")
+
+    return products
+
+def read_data_tailor_chain(chain_path):
+    # Read the YAML file
+    with open(chain_path, 'r') as file:
+        yaml_data = yaml.safe_load(file)
+    
+    # Create the Chain object by unpacking all YAML content
+    chain = eumdac.tailor_models.Chain(**yaml_data)
+
+    return chain
+
+def exec_data_tailor_process(product, datatailor, chain, download_dir):
+    print(f"Starting Data Tailor for product at {product}")
+    # Actual customisation submission
+    customisation = datatailor.new_customisation(product, chain=chain)
+
+    # Printing customisation status
+    sleep_time = 10 # seconds
+    while True:
+        status = customisation.status
+        if "DONE" in status:
+            print(f"Customisation {customisation._id} is successfully completed.")
+            print(f"Downloading the output of the customisation {customisation._id}")
+            cust_files = fnmatch.filter(customisation.outputs, '*')[0]
+            with customisation.stream_output(cust_files) as stream, open(Path(download_dir) / stream.name, mode='wb') as fdst:
+                shutil.copyfileobj(stream, fdst)
+                file_path = Path(download_dir) / stream.name
+            print(f"Download finished for customisation {customisation._id}.")
+            print(f"Finishing Data Tailor for product at {product}")
+            return file_path
             break
-    return filename
+        elif status in ["ERROR", "FAILED", "DELETED", "KILLED", "INACTIVE"]:
+            print(f"Customisation {customisation._id} was unsuccessful. Customisation log is printed.\n")
+            print(customisation.logfile)
+            break
+        elif "QUEUED" in status:
+            print(f"Customisation {customisation._id} is queued.")
+        elif "RUNNING" in status:
+            print(f"Customisation {customisation._id} is running.")
+        time.sleep(sleep_time)
 
 
-def get_eocanvas_log(api, job_index):
-    job_id = api.get_jobs()[job_index].job_id
-    log = api.get_job_logs(job=job_id)
-    return log
+def submit_data_tailor_customisations(selected_products, datatailor, chain, download_dir, 
+                                      exec_data_tailor_process = exec_data_tailor_process,
+                                     MAX_QUOTA = MAX_QUOTA):
+    with ThreadPoolExecutor(max_workers=MAX_QUOTA) as executor:
+        futures = [executor.submit(exec_data_tailor_process, product, datatailor, chain, download_dir) 
+                   for product in selected_products]
 
-
-def get_results_path_list(url_list, download_dir):
     result_paths = []
-    api = API()
-    for job_index in range(len(url_list)):
-        log = get_eocanvas_log(api, job_index)
-        file = search_output_filename_in_eocanvas_log(log)
-        if file is not None:
-            result_paths.append(Path(download_dir) / file)
+    # Get the results as they complete
+    for future in futures:
+        result_paths.append(future.result())
+        print(future.result())
 
     return result_paths
+
+
+def get_data_tailor_quota(datatailor):
+    try:
+        return datatailor.quota
+    except eumdac.datatailor.DataTailorError as error:
+        print(f"Error related to the Data Tailor: '{error.msg}'")
+    except requests.exceptions.RequestException as error:
+        print(f"Unexpected error: {error}")
+
+def get_data_tailor_space_usage_percentage(quota):
+    return quota['data'][list(quota['data'].keys())[0]]['space_usage_percentage']
+
+def clean_data_tailor_customisations(datatailor):
+    # Clearing all customisations from the Data Tailor
+    
+    for customisation in datatailor.customisations:
+        if customisation.status in ['QUEUED', 'INACTIVE', 'RUNNING']:
+            customisation.kill()
+            print(f'Delete {customisation.status} customisation {customisation} from {customisation.creation_time} UTC.')
+            try:
+                customisation.delete()
+            except eumdac.datatailor.CustomisationError as error:
+                print("Customisation Error:", error)
+            except Exception as error:
+                print("Unexpected error:", error)
+        else:
+            print(f'Delete completed customisation {customisation} from {customisation.creation_time} UTC.')
+            try:
+                customisation.delete()
+            except eumdac.datatailor.CustomisationError as error:
+                print("Customisation Error:", error)
+            except requests.exceptions.RequestException as error:
+                print("Unexpected error:", error)
 
 
 def subset_and_overwrite_geotiff(input_tiff, bounding_box):
     # Input GeoTIFF path
     temp_tiff = input_tiff.parent.absolute() / "temp_subset.tif"
 
+    bounding_box_list = [float(coord) for coord in bounding_box.split(', ')]
     # Create a geometry for the bounding box
-    bbox_geom = [box(*bounding_box)]
+    bbox_geom = [box(*bounding_box_list)]
 
     with rasterio.open(input_tiff) as src:
         # Crop the raster using the bounding box
@@ -127,54 +218,54 @@ def subset_and_overwrite_geotiff(input_tiff, bounding_box):
 
 
 def main_sentinel3(instrument, start_time, end_time, W, S, E, N, output_dir, run_name):
-    download_dir = Path(output_dir) / run_name / 'Satellite_Imagery' / instrument
 
-    c = Credentials(username=credentials.WEKEO_USERNAME, password=credentials.WEKEO_PASSWORD)
-    c.save()
-    c = Client()
+    (folder_name, collectionID, chain_path, orbit_direction) = get_config(instrument)
+    
+    # Create a download directory for our downloaded products    
+    download_dir = Path(output_dir) / run_name / "Satellite_Imagery" / folder_name
+    os.makedirs(download_dir, exist_ok=True)
 
-    (query, chain_path) = get_query_and_chain(instrument, start_time, end_time, W, S, E, N)
+    token = get_eumdac_access_token()
+    # create Data Store object
+    datastore = eumdac.DataStore(token)
+    # get Data Store Collection
+    collection = get_eumdac_collection(datastore, collectionID)
 
-    print(f'Querying data...')
-    r = c.search(query)
-    url_list = r.get_download_urls()
+    bounding_box = f'{W}, {S}, {E}, {N}'  # West, South, East, North
+    # search for product granules containing a bounding box in given timeframe
+    selected_products = search_spatially_temporally_for_products(collection, start_time, end_time, bounding_box, orbit_direction)
 
-    id_list = [result['id'] for result in r.results]
-    print(f'The following granules will be processed:')
-    print('\n'.join(id_list))
+    datatailor = eumdac.DataTailor(token)
+    chain = read_data_tailor_chain(chain_path)
 
-    chain = Chain.from_file(chain_path)
-
-    with ThreadPoolExecutor(max_workers=MAX_QUOTA) as executor:
-
-        futures = [executor.submit(exec_data_tailor_process, url, chain, download_dir) for url in url_list]
-
-        # Get the results as they complete
-        for future in futures:
-            print(future.result())
-
-    bounding_box = [W, S, E, N]
-
-    result_paths = get_results_path_list(url_list, download_dir)
+    #submit the customisations and download the data
+    result_paths = submit_data_tailor_customisations(selected_products, datatailor, chain, download_dir)
+    #Crop the data
     for input_tiff in result_paths:
         subset_and_overwrite_geotiff(input_tiff, bounding_box)
 
+    data_tailor_quota = get_data_tailor_quota(datatailor)
+    # Only if over 50% of quota is used, clear the customisations
+    if get_data_tailor_space_usage_percentage(data_tailor_quota) > 50:
+        clean_data_tailor_customisations(datatailor)
+    
     return
 
 
 if __name__ == "__main__":
+    # Set sensing start and end time
     start_time = "2024-09-14T00:00:00"
     end_time = "2024-09-20T23:59:59"
+    
+    #  lat-lon geographical bounds of search area
+    W = -9.3
+    S = 40
+    E = -7.0
+    N = 41.2
 
-    # Define the latitude and longitude of the bounding box
-    W = -8.8
-    S = 40.6
-    E = -7.4
-    N = 40.9
+    run_name = "testrun"
+    output_dir = './example_data/'
 
-    run_name = "aveiro_penalva"
-    output_dir = './ref_data/'
-
-    # main_sentinel3('SLSTR_SOLAR', start_time, end_time, W,S,E,N, output_dir, run_name)
-    # main_sentinel3('SLSTR_THERMAL', start_time, end_time, W,S,E,N, output_dir, run_name)
     main_sentinel3('OLCI', start_time, end_time, W, S, E, N, output_dir, run_name)
+    main_sentinel3('SLSTR_SOLAR', start_time, end_time, W,S,E,N, output_dir, run_name)
+    main_sentinel3('SLSTR_THERMAL', start_time, end_time, W,S,E,N, output_dir, run_name)

@@ -168,16 +168,20 @@ def main_sentinel3_frp(start_time, end_time, bounding_box, output_dir, run_name)
 
 
 if __name__ == "__main__":
-    start_time = datetime.datetime(2024, 8, 11)
-    end_time = datetime.datetime(2024, 8, 14)
-    W = 23.806
-    S = 38.017263
-    E = 23.994827
-    N = 38.267837
+    
+    # Set sensing start and end time
+    start_time = "2024-09-14T00:00:00"
+    end_time = "2024-09-20T23:59:59"
+
+    #  lat-lon geographical bounds of search area
+    W = -9.3
+    S = 40
+    E = -7.0
+    N = 41.2
     bounding_box = f'{W}, {S}, {E}, {N}'  # West, South, East, North
 
     run_name = "testrun"
 
-    output_dir = './'
+    output_dir = './example_data/'
 
     main_sentinel3_frp(start_time, end_time, bounding_box, output_dir, run_name)
