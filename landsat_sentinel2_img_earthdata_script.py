@@ -187,14 +187,14 @@ def main_earthdata(start_time, end_time, lonlat_bbox, output_dir, run_name, comp
 
 
 if __name__ == "__main__":
-    start_time = "2024-09-15T00:00:00"
+    start_time = "2024-09-15T12:00:00"
     end_time = "2024-09-20T23:59:59"
 
     # Define the latitudes and longitudes of the bounding box
-    W = 26.5
-    S = 41.7
-    E = 27.3
-    N = 42.3
+    W = -9.3
+    S = 40
+    E = -7.0
+    N = 41.2
     lonlat_bbox = [W, S, E, N]
 
     run_name = "testrun"

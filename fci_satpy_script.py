@@ -118,14 +118,14 @@ def main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir,
 
 if __name__ == "__main__":
     # should be a full 10-min time, like :00, :10, :20...
-    start_time = "2024-09-14T00:00:00"
+    start_time = "2024-09-15T15:50:00"
     end_time = "2024-09-20T23:59:59"
 
     # Define the latitude and longitude of the bounding box
-    W = -8.8
-    S = 40.6
-    E = -7.4
-    N = 40.9
+    W = -9.3
+    S = 40
+    E = -7.0
+    N = 41.2
     lonlat_bbox = [W, S, E, N]
 
     input_dir = '/tcenas/scratch/andream/sepeumdac/fci_l1c_input_data/'
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     run_name = "aveiro_penalva"
     output_dir = './ref_data/'
 
-    datasets = ['nir_22', 'ir_38', 'fire_temperature']
+    datasets = ['true_color']
 
     main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir, run_name,
              remote_files=remote_files,
