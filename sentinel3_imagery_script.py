@@ -108,11 +108,6 @@ def exec_data_tailor_process(product, datatailor, chain, download_dir):
     # Actual customisation submission
     customisation = datatailor.new_customisation(product, chain=chain)
 
-    data_tailor_quota = get_data_tailor_quota(datatailor)
-    # Only if over 30% of quota is used, clear the successfully finished customisations
-    if get_data_tailor_space_usage_percentage(data_tailor_quota) > 30:
-        clean_done_data_tailor_customisations(datatailor)
-
     # Printing customisation status
     sleep_time = 10 # seconds
     while True:
@@ -142,6 +137,12 @@ def exec_data_tailor_process(product, datatailor, chain, download_dir):
 def submit_data_tailor_customisations(selected_products, datatailor, chain, download_dir, 
                                       exec_data_tailor_process = exec_data_tailor_process,
                                      MAX_QUOTA = MAX_QUOTA):
+
+    data_tailor_quota = get_data_tailor_quota(datatailor)
+    # Only if over 30% of quota is used, clear the successfully finished customisations
+    if get_data_tailor_space_usage_percentage(data_tailor_quota) > 30:
+        clean_done_data_tailor_customisations(datatailor)
+
     with ThreadPoolExecutor(max_workers=MAX_QUOTA) as executor:
         futures = [executor.submit(exec_data_tailor_process, product, datatailor, chain, download_dir) 
                    for product in selected_products]
@@ -287,5 +288,5 @@ if __name__ == "__main__":
     output_dir = './example_data/'
 
     main_sentinel3('OLCI', start_time, end_time, W, S, E, N, output_dir, run_name)
-    main_sentinel3('SLSTR_SOLAR', start_time, end_time, W,S,E,N, output_dir, run_name)
+    # main_sentinel3('SLSTR_SOLAR', start_time, end_time, W,S,E,N, output_dir, run_name)
     main_sentinel3('SLSTR_THERMAL', start_time, end_time, W,S,E,N, output_dir, run_name)
