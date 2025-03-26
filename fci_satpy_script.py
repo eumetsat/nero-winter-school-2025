@@ -103,11 +103,13 @@ def main_fci(input_dir, datasets, start_time, end_time, lonlat_bbox, output_dir,
                                                    reader='fci_l1c_nc',
                                                    fs=fs,
                                                    missing_ok=True)
-            # manually create FSFiles for each found path and pass that to the Scene
-            fci_filenames['fci_l1c_nc'] = [FSFile(fn, fs=fs) for fn in fci_filenames['fci_l1c_nc']]
 
         if 'fci_l1c_nc' in fci_filenames and len(fci_filenames['fci_l1c_nc']) > 0:
             print(f"Found {len(fci_filenames['fci_l1c_nc'])} filenames")
+
+            # manually create FSFiles for each found path and pass that to the Scene
+            fci_filenames['fci_l1c_nc'] = [FSFile(fn, fs=fs) for fn in fci_filenames['fci_l1c_nc']]
+
             run_satpy_for_files_and_area(fci_filenames, datasets, lonlat_bbox, output_dir)
             clear_cache_if_exceeds_limit(CACHE_FOLDER, CACHE_SIZE_LIMIT_GB)
         else:
