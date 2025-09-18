@@ -69,14 +69,17 @@ def get_chunk_for_lon_lat(lon, lat):
     return index
 
 
-def get_chunks_for_lon_lat_bbox(lonlat_bbox):
-    chunks = []
-    chunks.append(get_chunk_for_lon_lat(lonlat_bbox[0], lonlat_bbox[1]))
-    chunks.append(get_chunk_for_lon_lat(lonlat_bbox[0], lonlat_bbox[3]))
-    chunks.append(get_chunk_for_lon_lat(lonlat_bbox[2], lonlat_bbox[1]))
-    chunks.append(get_chunk_for_lon_lat(lonlat_bbox[2], lonlat_bbox[3]))
-    chunks = list(range(min(chunks), max(chunks) + 1))  # Make the chunks gap free
-    print(f"The chunks for area {lonlat_bbox} are {chunks}")
+def get_chunks_for_lon_lat_bbox(lonlat_bbox: list[float] | None) -> list[int]:
+    if lonlat_bbox is None:
+        chunks = list(range(1, 41))
+        return chunks
+    else:
+        chunks = []
+        chunks.append(get_chunk_for_lon_lat(lonlat_bbox[0], lonlat_bbox[1]))
+        chunks.append(get_chunk_for_lon_lat(lonlat_bbox[0], lonlat_bbox[3]))
+        chunks.append(get_chunk_for_lon_lat(lonlat_bbox[2], lonlat_bbox[1]))
+        chunks.append(get_chunk_for_lon_lat(lonlat_bbox[2], lonlat_bbox[3]))
+        chunks = list(range(min(chunks), max(chunks) + 1))  # Make the chunks gap free
     return chunks
 
 
