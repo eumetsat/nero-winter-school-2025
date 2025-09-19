@@ -105,6 +105,7 @@ class EumdacDownloader:
             return
 
         self.output_folder_run = os.path.join(output_folder, run_name)
+        os.makedirs(self.output_folder_run, exist_ok=True)
 
         download_tasks = []
 
