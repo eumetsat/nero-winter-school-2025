@@ -25,7 +25,6 @@ import requests
 from get_fci_chunks_for_area import get_chunks_for_lon_lat_bbox
 from logger import setup_logger
 
-DEFAULT_PARALLEL_DOWNLOADS = 4
 
 logger = setup_logger(__name__)
 
@@ -99,7 +98,7 @@ class EumdacDownloader:
         for collection_id in collection_ids:
             self.search_products_for_collection(collection_id, start_time, end_time, search_bbox=search_bbox)
 
-    def download_products_for_collection(self, collection_id, output_folder, run_name, file_endings, lonlat_bbox=None,
+    def download_products_for_collection(self, collection_id, output_folder, run_name, file_endings, fci_l1c_chunks_lonlat_bbox=None,
                                          n_parallel_downloads=None):
         if collection_id not in self.collections:
             logger.info(f"Collection {collection_id} not found in the retrieved collections.")
@@ -110,9 +109,9 @@ class EumdacDownloader:
         download_tasks = []
 
         if 'FCI1C' in self.collections[collection_id]['product_type']:
-            chunks_list = get_chunks_for_lon_lat_bbox(lonlat_bbox)
-            if lonlat_bbox is None:
-                logger.info(f"No lonlat_bbox provided, will retrieve all chunks.")
+            chunks_list = get_chunks_for_lon_lat_bbox(fci_l1c_chunks_lonlat_bbox)
+            if fci_l1c_chunks_lonlat_bbox is None:
+                logger.info(f"No fci_l1c_chunks_lonlat_bbox provided, will retrieve all chunks.")
             else:
                 logger.info(f"Will be retrieving chunks: {chunks_list}")
 
@@ -126,25 +125,24 @@ class EumdacDownloader:
         else:
             for product in self.collections[collection_id]['products']:
                 for entry_filename in product.entries:
-                    if entry_filename.endswith(tuple(file_endings)):
+                    if file_endings is not None and not entry_filename.endswith(tuple(file_endings)):
+                        continue
+                    # cannot check the product.format as it takes forever to get (?)
+                    if ".SEN" in entry_filename:
+                        out_folder = os.path.join(self.output_folder_run,
+                                                  "".join(entry_filename.split('/')[:-1]))
+                        output_file = os.path.join(out_folder, entry_filename.split('/')[-1])
+                    else:
+                        out_folder = self.output_folder_run
+                        output_file = os.path.join(out_folder, entry_filename)
 
-                        # cannot check the product.format as it takes forever to get (?)
-                        if ".SEN" in entry_filename:
-                            out_folder = os.path.join(self.output_folder_run,
-                                                      "".join(entry_filename.split('/')[:-1]))
-                            output_file = os.path.join(out_folder, entry_filename.split('/')[-1])
-                        else:
-                            out_folder = self.output_folder_run
-                            output_file = os.path.join(out_folder, entry_filename)
+                    os.makedirs(out_folder, exist_ok=True)
 
-                        os.makedirs(out_folder, exist_ok=True)
+                    if os.path.exists(output_file):
+                        logger.info(f'File already exists, skipping download: {output_file}')
+                    else:
+                        download_tasks.append((product, entry_filename, output_file))
 
-                        if os.path.exists(output_file):
-                            logger.info(f'File already exists, skipping download: {output_file}')
-                        else:
-                            download_tasks.append((product, entry_filename, output_file))
-
-        n_parallel_downloads = n_parallel_downloads if n_parallel_downloads is not None else DEFAULT_PARALLEL_DOWNLOADS
         if len(download_tasks) > 0:
             logger.info(f"Starting download of {len(download_tasks)} files for collection {collection_id}.")
             # start with older data
@@ -163,9 +161,9 @@ class EumdacDownloader:
         return
 
     def download_products_for_collections(self, collection_ids, output_folder, run_name, file_endings,
-                                          lonlat_bbox=None, n_parallel_downloads=None):
+                                          fci_l1c_chunks_lonlat_bbox=None, n_parallel_downloads=None):
         for collection_id in collection_ids:
-            self.download_products_for_collection(collection_id, output_folder, run_name, file_endings, lonlat_bbox,
+            self.download_products_for_collection(collection_id, output_folder, run_name, file_endings, fci_l1c_chunks_lonlat_bbox,
                                                   n_parallel_downloads=n_parallel_downloads)
 
     def create_tarball(self, output_folder, run_name):
@@ -215,15 +213,37 @@ def download_file(args):
         logger.info(f"Unexpected error: {error}")
 
 
-def download_from_eumdac(start_time, end_time, collection_ids, file_endings,
-                         lonlat_bbox, output_folder, run_name, eumdac_key, eumdac_secret, create_tarball=False,
-                         n_parallel_downloads=None, search_bbox=None):
+def download_from_eumdac(start_time, end_time, collection_ids, output_folder, eumdac_key, eumdac_secret, run_name="",
+                         file_endings=None, fci_l1c_chunks_lonlat_bbox=None, search_bbox=None, create_tarball=False,
+                         n_parallel_downloads=4):
+    """Downloads EUMETSAT data products from the EUMDAC archive.
+
+    Some of the custom features:
+    - can filter FCI L1c chunks based on a lon/lat bounding box
+    - can filter LEO products based on a lon/lat bounding box
+    - adapts the search start/end times so that L2 products are retrieved correctly (avoids start/end overlap issue)
+    - downloads using multiple processes
+
+    Args:
+        start_time (str): Start time in ISO format 'YYYY-MM-DDThh:mm:ss'
+        end_time (str): End time in ISO format 'YYYY-MM-DDThh:mm:ss'
+        collection_ids (list): List of EUMETSAT collection IDs to download
+        output_folder (str): Local directory path to store downloaded files
+        eumdac_key (str): EUMDAC API access key
+        eumdac_secret (str): EUMDAC API secret key
+        run_name (str, optional): Subdirectory name for downloads. Defaults to "".
+        file_endings (list, optional): List of file extensions to filter downloads
+        fci_l1c_chunks_lonlat_bbox (list, optional): Lon/lat bounding box for FCI L1C data chunks. Defaults to None.
+        search_bbox (list, optional): Lon/lat bounding box to filter product search. Defaults to None.
+        create_tarball (bool, optional): Create compressed tarball of downloads. Defaults to False.
+        n_parallel_downloads (int, optional): Number of parallel download processes. Defaults to 4.
+    """
+
     eumdac_downloader = EumdacDownloader(eumdac_key, eumdac_secret)
     eumdac_downloader.search_products_for_collections(collection_ids, start_time, end_time, search_bbox=search_bbox)
     eumdac_downloader.download_products_for_collections(collection_ids, output_folder, run_name, file_endings,
-                                                        lonlat_bbox=lonlat_bbox,
+                                                        fci_l1c_chunks_lonlat_bbox=fci_l1c_chunks_lonlat_bbox,
                                                         n_parallel_downloads=n_parallel_downloads)
-
     if create_tarball:
         eumdac_downloader.create_tarball(output_folder, run_name)
     return
@@ -244,7 +264,7 @@ if __name__ == "__main__":
 
     # geographical bounds of search area
     lonlat_bbox = [-10.5, 31.8, 57.9, 72]
-    # lonlat_bbox = None
+    # fci_l1c_chunks_lonlat_bbox = None
 
     output_folder = "/downloaded_data/"
     run_name = ""
@@ -259,6 +279,5 @@ if __name__ == "__main__":
 
     file_endings = ['.nc']
 
-    download_from_eumdac("2025-08-05T14:00:00", "2025-08-06T10:59:00", collection_ids, file_endings,
-                         [1, 42, 5, 44], output_folder, run_name,
-                         eumdac_key, eumdac_secret)
+    download_from_eumdac("2025-08-05T14:00:00", "2025-08-06T10:59:00", collection_ids, output_folder, eumdac_key,
+                         eumdac_secret, run_name, file_endings, [1, 42, 5, 44])
