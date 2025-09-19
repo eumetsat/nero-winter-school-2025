@@ -17,7 +17,7 @@ dependencies:
   - h5netcdf
   - ipywidgets
   - jupyterlab
-  - matplotlib===3.9.4 # to avoid issue with ipympl unresponsive plots
+  - matplotlib==3.9.4 # to avoid issue with ipympl unresponsive plots
   - numpy
   - pandas
   - scipy
