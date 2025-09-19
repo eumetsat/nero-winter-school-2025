@@ -17,7 +17,7 @@ dependencies:
   - h5netcdf
   - ipywidgets
   - jupyterlab
-  - matplotlib
+  - matplotlib===3.9.4 # to avoid issue with ipympl unresponsive plots
   - numpy
   - pandas
   - scipy
@@ -31,4 +31,4 @@ dependencies:
   - urllib3
   - xarray
   - ipympl
-  - cartopy==0.23.0
+  - cartopy==0.23.0  # to avoid issue with vertices
