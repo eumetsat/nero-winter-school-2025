@@ -38,7 +38,7 @@ class EumdacDownloader:
         return
 
     def initialise_datastore(self, eumdac_key, eumdac_secret):
-        if eumdac_key == "YOUR_KEY":
+        if eumdac_key in ["YOUR_KEY", "<KEY>"]:
             raise ValueError("EUMDAC credentials are invalid. "
                              f"Please edit the credentials.py file at {os.path.abspath('credentials.py')} "
                              f"and set your key and secret. Exiting.")
@@ -50,14 +50,20 @@ class EumdacDownloader:
         logger.debug("DataStore initialized.")
         return datastore
 
-    def search_products_for_collection(self, collection_id, start_time, end_time):
+    def search_products_for_collection(self, collection_id, start_time, end_time, search_bbox=None):
         selected_collection = self.datastore.get_collection(collection_id)
 
         start_time_coll = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%S")
         end_time_coll = datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%S")
 
+        if start_time_coll > end_time_coll:
+            raise ValueError(f"Start time {start_time} is after end time {end_time}.")
+
         # Retrieve datasets that match the filter
+        if search_bbox is not None:
+            logger.info(f"Searching for products in area {search_bbox}")
         products = selected_collection.search(
+            bbox=search_bbox,
             dtstart=start_time_coll,
             dtend=end_time_coll)
 
@@ -71,7 +77,8 @@ class EumdacDownloader:
 
                 products = selected_collection.search(
                     dtstart=start_time_coll,
-                    dtend=end_time_coll)
+                    dtend=end_time_coll,
+                    bbox=search_bbox)
                 logger.info(
                     f"Found {len(products)} products for collection_id {collection_id} with type {product_type} and time range {start_time_coll} to {end_time_coll} (adjusted for L2).")
             else:
@@ -88,18 +95,17 @@ class EumdacDownloader:
 
         return len(products)
 
-    def search_products_for_collections(self, collection_ids, start_time, end_time):
+    def search_products_for_collections(self, collection_ids, start_time, end_time, search_bbox=None):
         for collection_id in collection_ids:
-            self.search_products_for_collection(collection_id, start_time, end_time)
+            self.search_products_for_collection(collection_id, start_time, end_time, search_bbox=search_bbox)
 
     def download_products_for_collection(self, collection_id, output_folder, run_name, file_endings, lonlat_bbox=None,
                                          n_parallel_downloads=None):
         if collection_id not in self.collections:
-            logger.info(f"Collection {collection_id} not found in the collections dictionary.")
+            logger.info(f"Collection {collection_id} not found in the retrieved collections.")
             return
 
         self.output_folder_run = os.path.join(output_folder, run_name)
-        os.makedirs(self.output_folder_run, exist_ok=True)
 
         download_tasks = []
 
@@ -111,21 +117,32 @@ class EumdacDownloader:
                 logger.info(f"Will be retrieving chunks: {chunks_list}")
 
             for product in self.collections[collection_id]['products']:
-                for file in filter_chunks(chunks_list, product.entries):
-                    output_file = os.path.join(self.output_folder_run, file)
+                for entry_filename in filter_chunks(chunks_list, product.entries):
+                    output_file = os.path.join(self.output_folder_run, entry_filename)
                     if os.path.exists(output_file):
                         logger.info(f'File {output_file} already exists, skipping download.')
                     else:
-                        download_tasks.append((product, file, self.output_folder_run))
+                        download_tasks.append((product, entry_filename, output_file))
         else:
             for product in self.collections[collection_id]['products']:
-                for file in product.entries:
-                    if file.endswith(tuple(file_endings)):
-                        output_file = os.path.join(self.output_folder_run, file)
+                for entry_filename in product.entries:
+                    if entry_filename.endswith(tuple(file_endings)):
+
+                        # cannot check the product.format as it takes forever to get (?)
+                        if ".SEN" in entry_filename:
+                            out_folder = os.path.join(self.output_folder_run,
+                                                      "".join(entry_filename.split('/')[:-1]))
+                            output_file = os.path.join(out_folder, entry_filename.split('/')[-1])
+                        else:
+                            out_folder = self.output_folder_run
+                            output_file = os.path.join(out_folder, entry_filename)
+
+                        os.makedirs(out_folder, exist_ok=True)
+
                         if os.path.exists(output_file):
                             logger.info(f'File already exists, skipping download: {output_file}')
                         else:
-                            download_tasks.append((product, file, self.output_folder_run))
+                            download_tasks.append((product, entry_filename, output_file))
 
         n_parallel_downloads = n_parallel_downloads if n_parallel_downloads is not None else DEFAULT_PARALLEL_DOWNLOADS
         if len(download_tasks) > 0:
@@ -184,12 +201,12 @@ def filter_chunks(chunks_list, entries):
 
 
 def download_file(args):
-    product, file, output_folder = args
+    product, file, output_file = args
     try:
         with product.open(entry=file) as fsrc, \
-                open(os.path.join(output_folder, fsrc.name), mode='wb') as fdst:
+                open(os.path.join(output_file), mode='wb') as fdst:
             shutil.copyfileobj(fsrc, fdst)
-            logger.info(f'Download of file {os.path.join(output_folder, fsrc.name)} finished.')
+            logger.info(f'Download of file {output_file} finished.')
     except eumdac.product.ProductError as error:
         logger.info(f"Error related to the product '{product}' while trying to download it: '{error}'")
     except requests.exceptions.ConnectionError as error:
@@ -200,9 +217,9 @@ def download_file(args):
 
 def download_from_eumdac(start_time, end_time, collection_ids, file_endings,
                          lonlat_bbox, output_folder, run_name, eumdac_key, eumdac_secret, create_tarball=False,
-                         n_parallel_downloads=None, ):
+                         n_parallel_downloads=None, search_bbox=None):
     eumdac_downloader = EumdacDownloader(eumdac_key, eumdac_secret)
-    eumdac_downloader.search_products_for_collections(collection_ids, start_time, end_time)
+    eumdac_downloader.search_products_for_collections(collection_ids, start_time, end_time, search_bbox=search_bbox)
     eumdac_downloader.download_products_for_collections(collection_ids, output_folder, run_name, file_endings,
                                                         lonlat_bbox=lonlat_bbox,
                                                         n_parallel_downloads=n_parallel_downloads)
